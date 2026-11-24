@@ -1,24 +1,54 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, status
+from fastapi.responses import JSONResponse
+
+from app.api.v1.incidents import router as incident_router
+from app.core.config import get_settings
+from app.core.database import check_database_health
+
+settings = get_settings()
 
 app = FastAPI(
-    title="AI Support Engine",
+    title=settings.app_name,
+    version=settings.app_version,
     description="AI-powered enterprise technical support platform",
-    version="0.1.0",
+    debug=settings.debug,
 )
 
 
-@app.get("/", tags=["System"])
+@app.get("/")
 def root() -> dict[str, str]:
-    """Return basic application information."""
+    """Return application information."""
     return {
-        "application": "AI Support Engine",
-        "version": "0.1.0",
+        "application": settings.app_name,
+        "version": settings.app_version,
     }
 
 
-@app.get("/health", tags=["System"])
-def health_check() -> dict[str, str]:
-    """Confirm that the application is running."""
-    return {
-        "status": "healthy",
-    }
+@app.get("/health")
+def health() -> dict[str, str]:
+    """Check whether the application is running."""
+    return {"status": "healthy"}
+
+
+@app.get("/ready")
+def readiness() -> JSONResponse:
+    """Check whether the application is ready to serve requests."""
+    if check_database_health():
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "status": "ready",
+                "database": "healthy",
+            },
+        )
+
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "status": "not_ready",
+            "database": "unavailable",
+        },
+    )
+
+
+app.include_router(incident_router, prefix=get_settings().api_v1_prefix)
