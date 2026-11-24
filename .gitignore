@@ -301,3 +301,5 @@ Desktop.ini
 # Local Docker overrides
 docker-compose.override.yml
 compose.override.yml
+backend/evaluations/live_smoke_results.json
+backend/evaluations/live_evaluation_results.json

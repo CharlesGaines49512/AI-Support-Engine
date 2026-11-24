@@ -61,4 +61,4 @@ def test_alembic_revision(
             text("SELECT version_num FROM alembic_version")
         ).scalar_one()
 
-        assert revision == "14a739ac0e2f"
+        assert revision == "421c4f9ba04a"
