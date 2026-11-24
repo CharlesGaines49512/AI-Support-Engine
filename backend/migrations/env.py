@@ -3,15 +3,16 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import create_engine, pool
 
+import app.models  # noqa: F401
+from app.core.base import Base
 from app.core.database import get_database_url
-from app.models import Incident
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-target_metadata = Incident.metadata
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:

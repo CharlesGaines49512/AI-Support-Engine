@@ -1,6 +1,7 @@
 from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
 
+from app.api.v1.ai_analyses import router as ai_analysis_router
 from app.api.v1.incidents import router as incident_router
 from app.core.config import get_settings
 from app.core.database import check_database_health
@@ -52,3 +53,5 @@ def readiness() -> JSONResponse:
 
 
 app.include_router(incident_router, prefix=get_settings().api_v1_prefix)
+
+app.include_router(ai_analysis_router, prefix=settings.api_v1_prefix)
