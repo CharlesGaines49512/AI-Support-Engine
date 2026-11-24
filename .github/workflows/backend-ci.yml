@@ -17,14 +17,34 @@ jobs:
   backend-quality:
     name: Backend Quality and Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
-    defaults:
-      run:
-        working-directory: backend
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.7-pg17
+        env:
+          POSTGRES_DB: ai_support_engine_migration_test
+          POSTGRES_USER: ai_support_user
+          POSTGRES_PASSWORD: ci_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ai_support_user -d ai_support_engine_migration_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      ENVIRONMENT: testing
+      POSTGRES_DB: ai_support_engine_migration_test
+      POSTGRES_USER: ai_support_user
+      POSTGRES_PASSWORD: ci_test_password
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      RUN_INTEGRATION_TESTS: "1"
 
     steps:
-      - name: Checkout repository
+      - name: Check out repository
         uses: actions/checkout@v6
         with:
           persist-credentials: false
@@ -36,23 +56,49 @@ jobs:
           cache: pip
           cache-dependency-path: backend/pyproject.toml
 
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e "backend[dev]"
 
-      - name: Install dependencies
-        run: python -m pip install -e ".[dev]"
-
-      - name: Verify dependencies
+      - name: Verify dependency integrity
         run: python -m pip check
 
       - name: Run Ruff linting
-        run: python -m ruff check .
+        run: python -m ruff check backend
 
       - name: Verify code formatting
-        run: python -m ruff format --check .
+        run: python -m ruff format --check backend
 
-      - name: Run static type checking
-        run: python -m mypy app tests
+      - name: Run strict type checking
+        run: >
+          python -m mypy
+          --config-file backend/pyproject.toml
+          backend/app backend/tests backend/migrations
 
-      - name: Run automated tests
-        run: python -m pytest --cov=app --cov-report=term-missing --cov-fail-under=80
+      - name: Apply database migrations
+        run: python -m alembic -c backend/alembic.ini upgrade head
+
+      - name: Verify migration consistency
+        run: python -m alembic -c backend/alembic.ini check
+
+      - name: Run unit and PostgreSQL integration tests
+        run: >
+          python -m pytest backend/tests
+          --cov=app
+          --cov-report=term-missing
+          --cov-report=xml:coverage.xml
+          --cov-fail-under=80
+          --junitxml=test-results.xml
+          -v
+
+      - name: Upload test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: backend-test-reports
+          path: |
+            coverage.xml
+            test-results.xml
+          if-no-files-found: warn
+          retention-days: 14

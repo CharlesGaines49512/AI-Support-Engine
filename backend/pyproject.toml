@@ -19,6 +19,10 @@ dependencies = [
     "uvicorn[standard]",
     "pydantic",
     "pydantic-settings",
+    "sqlalchemy>=2.0,<3.0",
+    "psycopg[binary]>=3.2,<4.0",
+    "alembic>=1.14,<2.0",
+    "pgvector>=0.3,<1.0",
 ]
 
 [project.optional-dependencies]
@@ -55,3 +59,4 @@ indent-style = "space"
 python_version = "3.14"
 strict = true
 warn_unused_configs = true
+plugins = ["pydantic.mypy"]
