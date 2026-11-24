@@ -221,3 +221,83 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# AI Support Engine - Project Exclusions
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+secrets/
+credentials/
+credentials.json
+*.pem
+*.key
+*.pfx
+
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Python testing and code quality
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Frontend build artifacts
+dist/
+build/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# Playwright test artifacts
+playwright-report/
+test-results/
+
+# Application logs
+*.log
+logs/
+
+# Local database files
+*.sqlite
+*.sqlite3
+*.db
+postgres-data/
+
+# Uploaded documents and application data
+uploads/
+local-data/
+
+# Terraform infrastructure
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+!*.example.tfvars
+crash.log
+
+# Local editor configuration
+.vscode/settings.json
+.idea/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local Docker overrides
+docker-compose.override.yml
+compose.override.yml
