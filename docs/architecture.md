@@ -272,7 +272,8 @@ Continuous integration:
 - Zero failed, errored, or skipped tests.
 
 These executable checks have passed local Linux CI-equivalent
-acceptance. Actual GitHub-hosted execution remains pending.
+acceptance. GitHub-hosted feature branch, pull request, and main branch
+execution passed.
 Dedicated dependency vulnerability scanning is planned and
 is not provided by version pinning or pip check.
 

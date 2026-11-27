@@ -353,8 +353,9 @@ These tests verify selected deterministic scenarios,
 not every possible production failure.
 
 Local Linux CI-equivalent regression has passed.
-Actual GitHub Actions execution and feature branch merge
-remain pending.
+GitHub-hosted feature branch, pull request, and post-merge
+main branch workflows passed. Stage 7 was merged through
+pull request #5 on November 27, 2026.
 
 ## Stage 7 Acceptance Baseline
 
@@ -427,5 +428,6 @@ A pre-migration PostgreSQL backup was created and its archive
 inventory and integrity were verified. A restore rehearsal was
 not performed.
 
-Actual GitHub Actions execution and feature branch merge
-remain pending.
+GitHub-hosted feature branch, pull request, and post-merge
+main branch workflows passed. Stage 7 was merged through
+pull request #5 on November 27, 2026.

@@ -419,8 +419,9 @@ acceptance using a fresh PostgreSQL instance. GitHub-specific
 checkout, setup, caching, artifact upload, and runner timeout
 behavior were not reproduced by the local acceptance harness.
 
-Actual GitHub Actions execution must pass before merging
-the Stage 7 feature branch.
+GitHub-hosted feature branch and pull request workflows
+passed before Stage 7 was merged into main. The subsequent
+main branch workflow also passed.
 
 ## Current Limitations
 
@@ -559,5 +560,6 @@ A pre-migration PostgreSQL backup was created and its archive
 inventory and integrity were verified. A restore rehearsal was
 not performed.
 
-Actual GitHub Actions execution and feature branch merge
-remain pending.
+GitHub-hosted feature branch, pull request, and post-merge
+main branch workflows passed. Stage 7 was merged through
+pull request #5 on November 27, 2026.
