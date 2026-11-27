@@ -1,0 +1,8 @@
+# AI Support Engine build tooling
+# Verified on CPython 3.14.7, Windows and Linux.
+# Install into a fresh virtual environment before installing the project.
+# python -m pip install -r backend/build-requirements.txt
+# setuptools is also pinned in pyproject.toml for isolated builds.
+
+pip==26.2.1
+setuptools==84.2.1

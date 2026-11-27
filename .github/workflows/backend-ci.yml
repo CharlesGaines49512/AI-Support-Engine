@@ -52,17 +52,131 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.14"
+          python-version: "3.14.7"
           cache: pip
-          cache-dependency-path: backend/pyproject.toml
+          cache-dependency-path: |
+            backend/pyproject.toml
+            backend/constraints.txt
+            backend/build-requirements.txt
+
+      - name: Create isolated Python environment
+        shell: bash
+        run: |
+          python -m venv "$RUNNER_TEMP/ai-support-engine-venv"
+          echo "$RUNNER_TEMP/ai-support-engine-venv/bin" >> "$GITHUB_PATH"
+          echo "PYTHONNOUSERSITE=1" >> "$GITHUB_ENV"
 
       - name: Install backend dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e "backend[dev]"
+          python -m pip install --only-binary=:all: -r backend/build-requirements.txt
+          python -m pip install --only-binary=:all: -c backend/constraints.txt -e "backend[dev]"
 
       - name: Verify dependency integrity
         run: python -m pip check
+
+      - name: Verify exact installed dependency versions
+        run: |
+          python - <<'PY'
+          import importlib.metadata as metadata
+          import os
+          import site
+          import sys
+          from pathlib import Path
+
+          from packaging.requirements import Requirement
+          from packaging.utils import canonicalize_name
+
+          assert sys.version_info[:3] == (3, 14, 7)
+
+          expected_environment = (
+              Path(os.environ["RUNNER_TEMP"])
+              / "ai-support-engine-venv"
+          ).resolve()
+
+          assert Path(sys.prefix).resolve() == expected_environment
+          assert sys.prefix != sys.base_prefix
+          assert site.ENABLE_USER_SITE is False
+
+          environment_configuration = (
+              expected_environment / "pyvenv.cfg"
+          ).read_text(encoding="utf-8")
+
+          assert (
+              "include-system-site-packages = false"
+              in environment_configuration.lower()
+          )
+
+          print("PASS: Dedicated CI virtual environment verified.")
+          print("PASS: System and user site-packages excluded.")
+
+          expected = {}
+
+          for filename in (
+              "backend/constraints.txt",
+              "backend/build-requirements.txt",
+          ):
+              for line in Path(filename).read_text(
+                  encoding="utf-8"
+              ).splitlines():
+                  if not line.strip() or line.lstrip().startswith("#"):
+                      continue
+
+                  requirement = Requirement(line)
+
+                  if (
+                      requirement.marker is not None
+                      and not requirement.marker.evaluate()
+                  ):
+                      continue
+
+                  name = canonicalize_name(requirement.name)
+                  specifiers = list(requirement.specifier)
+
+                  assert name not in expected
+                  assert len(specifiers) == 1
+                  assert specifiers[0].operator == "=="
+                  assert "*" not in specifiers[0].version
+
+                  expected[name] = specifiers[0].version
+
+          expected["ai-support-engine"] = "0.1.0"
+
+          assert sys.platform == "linux"
+          assert len(expected) == 50
+
+          actual = {}
+
+          for distribution in metadata.distributions():
+              name = canonicalize_name(
+                  distribution.metadata["Name"]
+              )
+
+              assert name not in actual, name
+
+              actual[name] = distribution.version
+
+          missing = sorted(set(expected) - set(actual))
+
+          unexpected = sorted(set(actual) - set(expected))
+
+          mismatches = {
+              name: (expected[name], actual[name])
+              for name in set(expected) & set(actual)
+              if expected[name] != actual[name]
+          }
+
+          print("Expected distributions:", len(expected))
+          print("Installed distributions:", len(actual))
+          print("Missing packages:", missing)
+          print("Unexpected packages:", unexpected)
+          print("Version mismatches:", mismatches)
+
+          assert not missing
+          assert not unexpected
+          assert not mismatches
+
+          print("PASS: Exact pinned Linux dependency inventory.")
+          PY
 
       - name: Run Ruff linting
         run: python -m ruff check backend
@@ -88,9 +202,65 @@ jobs:
           --cov=app
           --cov-report=term-missing
           --cov-report=xml:coverage.xml
-          --cov-fail-under=80
+          --cov-fail-under=100
           --junitxml=test-results.xml
-          -v
+          -W error::DeprecationWarning
+          --tb=short
+          -q
+
+      - name: Enforce test and coverage report integrity
+        run: |
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+
+          coverage = ET.parse("coverage.xml").getroot()
+
+          valid = int(coverage.attrib["lines-valid"])
+          covered = int(coverage.attrib["lines-covered"])
+
+          assert valid > 0
+          assert covered == valid, (
+              f"Uncovered application statements: {valid - covered}"
+          )
+
+          report = ET.parse("test-results.xml").getroot()
+
+          if report.tag == "testsuite":
+              suites = [report]
+          else:
+              suites = list(report.findall("testsuite"))
+
+          assert suites, "No test suites found."
+
+          totals = {
+              field: sum(
+                  int(suite.attrib[field])
+                  for suite in suites
+              )
+              for field in (
+                  "tests",
+                  "failures",
+                  "errors",
+                  "skipped",
+              )
+          }
+
+          assert totals["tests"] > 0
+          assert totals["failures"] == 0
+          assert totals["errors"] == 0
+          assert totals["skipped"] == 0
+
+          print("Executed tests:", totals["tests"])
+          print("Failures:", totals["failures"])
+          print("Errors:", totals["errors"])
+          print("Skipped:", totals["skipped"])
+          print("Covered statements:", covered)
+          print("Total statements:", valid)
+          print("Missed statements:", valid - covered)
+
+          print("PASS: Zero skipped or failed tests.")
+          print("PASS: Exact 100% statement coverage.")
+          PY
 
       - name: Upload test and coverage reports
         if: always()

@@ -1,4 +1,4 @@
-﻿# Backend Architecture and Development Guide
+# Backend Architecture and Development Guide
 
 ## Overview
 
@@ -9,14 +9,18 @@ The current implementation includes persistent incident management,
 request validation, business rules, database migrations, transaction
 management, health monitoring, and automated quality verification.
 
-AI classification, retrieval-augmented generation, authentication,
-and frontend functionality are planned for later development stages.
+Structured AI incident analysis, persistent analysis history,
+application log ingestion, diagnostic evidence extraction,
+and log-enhanced AI analysis are implemented.
+
+Retrieval-augmented generation, authentication, authorization,
+and frontend functionality remain future work.
 
 ## Technology Stack
 
 | Component | Technology |
 |---|---|
-| Programming language | Python 3.14 |
+| Programming language | Python 3.14.7 |
 | API framework | FastAPI |
 | Data validation | Pydantic |
 | ORM | SQLAlchemy |
@@ -114,7 +118,7 @@ backend/
 
 ### Prerequisites
 
-- Python 3.14
+- CPython 3.14.7
 - Docker with Docker Compose
 - Git
 
@@ -125,10 +129,26 @@ Run the following commands from the repository root using PowerShell.
 ```powershell
 python -m venv backend/.venv
 
-.\backend\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\backend\.venv\Scripts\python.exe -m pip install --only-binary=:all: -r backend/build-requirements.txt
 
-.\backend\.venv\Scripts\python.exe -m pip install -e "backend[dev]"
+.\backend\.venv\Scripts\python.exe -m pip install --only-binary=:all: -c backend/constraints.txt -e "backend[dev]"
 ```
+
+The project declares runtime and development dependencies in
+`backend/pyproject.toml`. Exact dependency versions are maintained
+in `backend/constraints.txt`, while build tools are pinned in
+`backend/build-requirements.txt`.
+
+The verified build tools are pip 26.2.1 and setuptools 84.2.1.
+The setuptools build requirement is also pinned in pyproject.toml.
+
+The constraints support the verified Windows AMD64 and Linux
+x86_64 environments. They establish version reproducibility,
+not cryptographically verified package artifacts.
+
+Use a fresh virtual environment for clean-install acceptance.
+Dependency upgrades require renewed resolution, installation,
+static quality, and regression verification.
 
 ### Configure the Environment
 
@@ -257,12 +277,7 @@ Closed incidents cannot transition to another status.
 
 ## Database Migrations
 
-Current migration history:
-
-| Revision | Purpose |
-|---|---|
-| 180b60b1ebd9 | Enable pgvector extension |
-| 14a739ac0e2f | Create incidents table |
+Current migration history is documented in the [Stage 7 migration history](#database-migration-history) below.
 
 Check migration consistency:
 
@@ -274,7 +289,7 @@ Check migration consistency:
 
 ## Automated Testing
 
-The Stage 5 local verification baseline consists of:
+The historical Stage 5 local verification baseline consisted of:
 
 | Test category | Tests |
 |---|---:|
@@ -304,11 +319,16 @@ security assurance, or production readiness.
 ### Run Unit Tests
 
 ```powershell
-.\backend\.venv\Scripts\python.exe -m pytest backend/tests --cov=app --cov-report=term-missing --cov-fail-under=80
+.\backend\.venv\Scripts\python.exe -m pytest backend/tests --ignore=backend/tests/integration -W error::DeprecationWarning --tb=short -q
 ```
 
-Without integration testing enabled, the current suite executes
-148 tests and skips 32 PostgreSQL integration tests.
+This command excludes the PostgreSQL integration directory.
+It is intended for focused development verification and does
+not establish complete CI acceptance or full application coverage.
+
+The historical Stage 5 suite executed 148 tests and skipped
+32 integration tests when integration testing was disabled.
+Those counts are not the current regression baseline.
 
 ### Run PostgreSQL Integration Tests
 
@@ -321,17 +341,28 @@ docker compose exec postgres psql -U ai_support_user -d postgres -c "CREATE DATA
 If the database already exists, skip its creation.
 
 ```powershell
-$env:POSTGRES_DB = "ai_support_engine_migration_test"
-$env:RUN_INTEGRATION_TESTS = "1"
+$previousDatabase = $env:POSTGRES_DB
+$previousIntegration = $env:RUN_INTEGRATION_TESTS
 
 try {
-    .\backend\.venv\Scripts\python.exe -m alembic -c backend/alembic.ini upgrade head
+    $env:POSTGRES_DB = "ai_support_engine_migration_test"
+    $env:RUN_INTEGRATION_TESTS = "1"
 
-    .\backend\.venv\Scripts\python.exe -m pytest backend/tests --cov=app --cov-report=term-missing --cov-fail-under=80
+    .\backend\.venv\Scripts\python.exe -c "from app.core.database import get_database_url; assert get_database_url().database == 'ai_support_engine_migration_test'"
+    if ($LASTEXITCODE -ne 0) { throw "Database identity check failed." }
+
+    .\backend\.venv\Scripts\python.exe -m alembic -c backend/alembic.ini upgrade head
+    if ($LASTEXITCODE -ne 0) { throw "Migration failed." }
+
+    .\backend\.venv\Scripts\python.exe -m alembic -c backend/alembic.ini check
+    if ($LASTEXITCODE -ne 0) { throw "Schema consistency check failed." }
+
+    .\backend\.venv\Scripts\python.exe -m pytest backend/tests --cov=app --cov-report=term-missing --cov-fail-under=100 -W error::DeprecationWarning --tb=short -q
+    if ($LASTEXITCODE -ne 0) { throw "Regression failed." }
 }
 finally {
-    Remove-Item Env:POSTGRES_DB
-    Remove-Item Env:RUN_INTEGRATION_TESTS
+    $env:POSTGRES_DB = $previousDatabase
+    $env:RUN_INTEGRATION_TESTS = $previousIntegration
 }
 ```
 
@@ -339,7 +370,14 @@ Integration fixtures verify the database name before executing tests.
 Uncommitted repository changes are rolled back. Committed service
 and API test records are removed using isolated test categories.
 
-Never run integration tests against a production database.
+Never run integration tests against a development or production
+database. Verify the configured database host and isolated test
+database identity before applying migrations or executing tests.
+
+The local command enforces the coverage threshold and treats
+deprecation warnings as errors. Complete CI acceptance additionally
+validates the generated JUnit and coverage XML reports for zero
+skipped tests and zero missed application statements.
 
 ## Code Quality
 
@@ -355,20 +393,34 @@ Never run integration tests against a production database.
 
 ## Continuous Integration
 
-The updated GitHub Actions workflow is designed to:
+The workflow is defined in `.github/workflows/backend-ci.yml`.
 
-1. Provision PostgreSQL with pgvector.
-2. Install Python and backend dependencies.
-3. Verify dependency integrity.
-4. Execute Ruff linting and formatting checks.
-5. Execute strict Mypy type checking.
-6. Apply and validate Alembic migrations.
-7. Run unit and PostgreSQL integration tests.
-8. Enforce a minimum statement coverage threshold of 80%.
-9. Upload JUnit and coverage XML reports.
+It is configured to:
 
-Remote execution must be verified before merging the Stage 5
-feature branch.
+1. Check out the repository with read-only contents permissions.
+2. Provision PostgreSQL 17 with pgvector 0.8.7.
+3. Install Python 3.14.7 and create an isolated virtual environment.
+4. Install pinned build tools and constrained backend dependencies.
+5. Verify dependency integrity and the exact Linux package inventory.
+6. Execute full backend Ruff linting and formatting checks.
+7. Execute strict Mypy checks for application, tests, and migrations.
+8. Apply and validate Alembic migrations.
+9. Run all unit and PostgreSQL integration tests, treating
+   deprecation warnings as errors.
+10. Require exact 100% application statement coverage and zero
+    failed, errored, or skipped tests through XML report validation.
+11. Upload JUnit and coverage XML reports.
+
+The workflow enables integration testing against
+`ai_support_engine_migration_test`.
+
+All 11 executable workflow steps passed local Linux CI-equivalent
+acceptance using a fresh PostgreSQL instance. GitHub-specific
+checkout, setup, caching, artifact upload, and runner timeout
+behavior were not reproduced by the local acceptance harness.
+
+Actual GitHub Actions execution must pass before merging
+the Stage 7 feature branch.
 
 ## Current Limitations
 
@@ -378,13 +430,134 @@ The following capabilities remain planned:
 
 - Authentication and role-based authorization
 - Incident audit history
-- Concurrent update protection
+- Comprehensive concurrent update and load verification
 - Production-grade deletion and retention policies
-- AI incident classification
 - Knowledge base and vector similarity retrieval
-- AI-generated resolution recommendations
+- Documentation-backed remediation recommendations
 - Automated support workflows
 - Frontend dashboard
 - Production observability and deployment
 
 The unauthenticated development API should not be exposed publicly.
+
+## Stage 7 Application Log API
+
+All log endpoints are scoped to an existing incident.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| POST | /api/v1/incidents/{incident_id}/logs | Ingest logs |
+| GET | /api/v1/incidents/{incident_id}/logs | List submissions |
+| GET | /api/v1/incidents/{incident_id}/logs/{submission_id} | Retrieve submission |
+| DELETE | /api/v1/incidents/{incident_id}/logs/{submission_id} | Delete submission |
+| GET | /api/v1/incidents/{incident_id}/logs/{submission_id}/entries | List entries |
+| GET | /api/v1/incidents/{incident_id}/logs/{submission_id}/entries/{entry_id} | Retrieve entry |
+| GET | /api/v1/incidents/{incident_id}/logs/{submission_id}/evidence | Retrieve evidence |
+
+Ingestion accepts a raw UTF-8 request body with the required
+source_format query parameter.
+
+Supported formats are text, JSON, and XML. The Content-Type
+header must match the selected format.
+
+The optional X-Log-Source-Name header accepts printable
+ASCII and is sanitized before persistence.
+
+Submission and entry retrieval support bounded pagination.
+
+Consult /docs and /openapi.json for generated API contracts.
+
+### Database Migration History
+
+| Revision | Purpose |
+| --- | --- |
+| 180b60b1ebd9 | Enable pgvector |
+| 14a739ac0e2f | Create incidents |
+| 421c4f9ba04a | Create AI analyses |
+| c150a35f0639 | Create log tables |
+| 8e47c2a19b60 | Add AI evidence provenance |
+
+The Stage 7 migration head is 8e47c2a19b60.
+
+Integration tests must use ai_support_engine_migration_test,
+never the development or production database.
+
+The development database was upgraded from c150a35f0639
+to 8e47c2a19b60 through a separately verified additive
+migration. The integration database remained unchanged.
+
+See [Log Ingestion Architecture](log-ingestion-architecture.md).
+
+## Stage 7 Acceptance Baseline
+
+### Automated Regression
+
+| Metric | Windows baseline | Isolated Linux CI-equivalent run |
+| --- | ---: | ---: |
+| Passing tests | 15,415 | 15,415 |
+| Application statements covered | 2,781/2,781 | 2,781/2,781 |
+| Statement coverage | 100% | 100% |
+| Failed or skipped tests | 0 | 0 |
+| Regression duration | 312.85 s | 217.54 s |
+
+The Windows baseline preceded the final test typing corrections.
+A subsequent targeted regression passed all 2,559 tests across
+the nine corrected modules. The complete Linux regression
+then reproduced the full test and coverage baseline.
+
+The historical Windows regression included 2,366 PostgreSQL
+integration tests.
+
+### Static Quality and Dependencies
+
+- Ruff linting: passed.
+- Ruff formatting: 221 files checked.
+- Strict Mypy: 219 application, test, and migration source files.
+- Strict Mypy errors: zero.
+- Python dependency integrity: passed.
+- Clean Windows installation: 51 expected distributions verified.
+- Clean Linux installation: 50 expected distributions verified.
+- Shared dependency version mismatches: zero.
+
+Both installation environments used Python 3.14.7,
+pip 26.2.1, and setuptools 84.2.1. The project maintains
+49 exact-version dependency constraints, including
+platform-specific requirements.
+
+### Database and CI Acceptance
+
+- Five migration upgrades and downgrades previously verified
+  against an isolated migration acceptance database.
+- All five migrations applied to a fresh Linux PostgreSQL instance.
+- Migration head: 8e47c2a19b60.
+- PostgreSQL 17.12 and pgvector 0.8.7 verified in Linux.
+- Alembic consistency: no new upgrade operations detected.
+- Zero residual application records after regression.
+- All 11 executable CI workflow steps passed.
+- Exact 100% statement coverage and zero skipped tests enforced.
+
+The CI-equivalent acceptance was executed locally in Docker
+using an isolated database instance and the workflow's executable
+shell commands. It was not a GitHub-hosted Actions run.
+
+### Remaining Limitations
+
+Statement coverage does not establish complete branch,
+behavioral, or security coverage.
+
+Automated AI tests use synthetic responses and intercepted
+transport. Live provider accuracy, latency, and billing
+remain unverified.
+
+The local development database has been upgraded to revision
+8e47c2a19b60. Independent post-migration verification confirmed
+matching development and integration schemas, zero ORM schema
+differences, and preservation of existing application records.
+
+Both databases contained zero application records at acceptance.
+A pre-migration PostgreSQL backup was created and its archive
+inventory and integrity were verified. A restore rehearsal was
+not performed.
+
+Actual GitHub Actions execution and feature branch merge
+remain pending.

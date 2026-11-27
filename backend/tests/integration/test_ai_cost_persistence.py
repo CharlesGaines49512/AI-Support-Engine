@@ -18,13 +18,18 @@ from app.integrations.ai import (
 from app.models import AIAnalysis, Incident
 from app.models.ai_enums import AIAnalysisStatus
 from app.models.enums import IncidentPriority
+from app.models.log_enums import LogFormat
 from app.prompts import INCIDENT_ANALYSIS_PROMPT_VERSION
+from app.prompts.log_enhanced_analysis import (
+    LOG_ENHANCED_PROMPT_VERSION,
+)
 from app.schemas.ai_analysis import (
     IncidentAnalysisResult,
     IncidentCategory,
     IncidentSeverity,
 )
 from app.services.ai_analysis_query import AIAnalysisQueryService
+from app.services.log_ingestion import LogIngestionService
 from app.services.persistent_ai_analysis import (
     PersistentAIAnalysisService,
 )
@@ -342,3 +347,75 @@ def test_partial_usage_preserves_analysis(
         assert metrics.estimated_cost_usd is None
         assert metrics.total_tokens == usage.total_tokens
         assert metrics.cached_usage_sample_count == 0
+
+
+@pytest.mark.parametrize(
+    ("pricing_model", "expected_cost"),
+    [
+        ("synthetic-model", Decimal("0.0054000000")),
+        ("unmatched-model", None),
+    ],
+)
+def test_enhanced_cost_persistence(
+    session_factory: sessionmaker[Session],
+    incident_id: UUID,
+    provider: AsyncMock,
+    pricing_model: str,
+    expected_cost: Decimal | None,
+) -> None:
+    import asyncio
+
+    settings = Settings(
+        ai_enabled=True,
+        ai_model="synthetic-model",
+        openai_api_key=SecretStr("synthetic-api-key"),
+        ai_pricing_model=pricing_model,
+        ai_pricing_input_usd_per_million=Decimal("2"),
+        ai_pricing_cached_input_usd_per_million=Decimal("0.5"),
+        ai_pricing_output_usd_per_million=Decimal("8"),
+    )
+
+    response = provider.generate_structured.return_value
+
+    provider.generate_structured.return_value = response.model_copy(
+        update={
+            "prompt_version": LOG_ENHANCED_PROMPT_VERSION,
+        }
+    )
+
+    submission = LogIngestionService(
+        session_factory,
+        settings,
+    ).ingest(
+        incident_id,
+        b"ERROR Database connection failed.",
+        LogFormat.TEXT,
+    )
+
+    service = PersistentAIAnalysisService(
+        session_factory=session_factory,
+        settings=settings,
+        provider_factory=MagicMock(return_value=provider),
+    )
+
+    created = asyncio.run(
+        service.analyze_incident(
+            incident_id,
+            submission_id=submission.submission_id,
+        )
+    )
+
+    assert created.status == AIAnalysisStatus.SUCCEEDED
+    assert created.estimated_cost_usd == expected_cost
+
+    with session_factory() as session:
+        stored = session.get(AIAnalysis, created.id)
+
+        assert stored is not None
+        assert stored.estimated_cost_usd == expected_cost
+        assert stored.log_submission_id == submission.submission_id
+        assert stored.prompt_version == LOG_ENHANCED_PROMPT_VERSION
+        assert stored.log_evidence_sha256 is not None
+
+    provider.generate_structured.assert_awaited_once()
+    provider.close.assert_awaited_once()

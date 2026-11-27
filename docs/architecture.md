@@ -10,6 +10,24 @@ This approach reduces initial infrastructure complexity
 while maintaining clear module boundaries and supporting
 future architectural expansion.
 
+## Current Implementation Status
+
+The Stage 7 backend implements incident management,
+structured AI analysis, application log ingestion,
+diagnostic evidence extraction, and log-enhanced analysis.
+
+PostgreSQL persistence, migrations, health and readiness
+checks, and automated regression testing are implemented.
+
+The following diagrams describe the target architecture
+and include components that are not yet implemented.
+
+Frontend functionality, authentication, authorization,
+knowledge retrieval, automated remediation, and production
+observability remain planned.
+
+The current API must remain restricted to trusted local use.
+
 ## 2. High-Level System Design
 
 ```mermaid
@@ -245,10 +263,18 @@ Local development:
 - pgvector
 
 Continuous integration:
-- GitHub Actions
-- Automated testing
-- Code quality checks
-- Dependency security scanning
+- GitHub Actions workflow with read-only contents permissions.
+- Isolated Python environment and pinned dependencies.
+- Automated unit and PostgreSQL integration testing.
+- Ruff linting, formatting, and strict Mypy verification.
+- Alembic migration consistency checks.
+- Exact 100% application statement coverage.
+- Zero failed, errored, or skipped tests.
+
+These executable checks have passed local Linux CI-equivalent
+acceptance. Actual GitHub-hosted execution remains pending.
+Dedicated dependency vulnerability scanning is planned and
+is not provided by version pinning or pip check.
 
 Future cloud deployment:
 - AWS infrastructure
@@ -258,7 +284,8 @@ Future cloud deployment:
 
 ## 10. Architecture Status
 
-Status: Proposed
+Status: Target architecture with Stage 7 backend verified through
+local Windows and isolated Linux regression.
 Version: 0.1.0
 
 This document will evolve alongside the implementation.

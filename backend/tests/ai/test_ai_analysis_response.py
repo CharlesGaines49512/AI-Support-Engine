@@ -256,7 +256,14 @@ def test_response_json_schema() -> None:
 
     properties = schema["properties"]
 
-    assert len(properties) == 26
+    assert len(properties) == 30
+
+    assert {
+        "log_submission_id",
+        "log_evidence_version",
+        "log_evidence_sha256",
+        "log_evidence_event_count",
+    }.issubset(properties)
     assert "id" in properties
     assert "incident_id" in properties
     assert "status" in properties

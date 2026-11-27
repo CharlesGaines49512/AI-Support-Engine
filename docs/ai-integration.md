@@ -1,4 +1,4 @@
-﻿# AI Integration
+# AI Integration
 
 ## Overview
 
@@ -263,7 +263,7 @@ containing real credentials.
 
 ## Automated Verification
 
-Latest verified local regression results:
+Historical Stage 6 local regression results:
 
 - 867 passing automated tests.
 - 733 unit, mocked, and SDK transport tests.
@@ -272,7 +272,7 @@ Latest verified local regression results:
 - 100% application statement coverage.
 - Regression execution time: 22.28 seconds.
 
-Latest verified static quality results:
+Historical Stage 6 static quality results:
 
 - Ruff linting: passed.
 - Ruff formatting: 102 files.
@@ -358,7 +358,9 @@ Generated evaluation reports are excluded from source control.
 - Synthetic evaluation cases are not a comprehensive production dataset.
 - Technical troubleshooting usefulness requires additional evaluation.
 - Credential sanitization and prompt injection defenses are incomplete.
-- Concurrent execution and cancellation behavior require further testing.
+- Selected concurrent modification, cancellation, and recovery
+  scenarios are verified. Comprehensive production concurrency
+  and load testing remain future work.
 - Estimated cost records are not a complete billing ledger.
 - Authentication and role-based authorization remain future work.
 - API rate limiting and production security remain future work.
@@ -366,8 +368,135 @@ Generated evaluation reports are excluded from source control.
 - Knowledge-base retrieval and evidence citations remain future work.
 - Automated remediation workflows remain future work.
 
-## Next Development Stage
+## Stage 7 Log-Enhanced Analysis
 
-Stage 7 will implement application log ingestion, structured parsing,
-validation, sensitive-data redaction, and integration with technical
-incident analysis.
+The analysis creation endpoint accepts an optional JSON
+request body containing log_submission_id.
+
+The identifier must reference a submission belonging to
+the incident being analyzed.
+
+An omitted body or null submission identifier retains
+standard incident-only analysis.
+
+Enhanced analysis uses bounded, sanitized diagnostic
+evidence and a separate versioned prompt.
+
+Evidence remains untrusted data.
+
+Before persistence, the application revalidates the
+incident and diagnostic evidence within a transaction.
+
+Changed or unverifiable evidence prevents persistence.
+
+### Historical Evidence Provenance
+
+Enhanced analysis records contain four provenance fields:
+
+- log_submission_id
+- log_evidence_version
+- log_evidence_sha256
+- log_evidence_event_count
+
+Standard analyses retain null provenance fields.
+
+The SHA-256 digest identifies canonical diagnostic context.
+It is not a digital signature or proof of authenticity.
+
+Successful and expected failed enhanced attempts retain
+provenance. Historical provenance survives log deletion.
+
+Deleting an incident cascades to associated analyses.
+
+### Additional HTTP Response Behavior
+
+- 400: Invalid request framing or encoding.
+- 413: Oversized request body.
+- 415: Unsupported media type or encoding.
+- 404: Missing or foreign log submission.
+- 409: Changed or unverifiable diagnostic evidence.
+
+Expected provider failures may produce HTTP 201 with a
+persisted failed analysis resource.
+
+Cancellation and unexpected persistence failures do not
+create partially committed analysis records.
+
+Selected recovery tests verify subsequent successful
+requests without overwriting existing history.
+
+See [Log Ingestion Architecture](log-ingestion-architecture.md).
+
+## Stage 7 Acceptance Baseline
+
+### Automated Regression
+
+| Metric | Windows baseline | Isolated Linux CI-equivalent run |
+| --- | ---: | ---: |
+| Passing tests | 15,415 | 15,415 |
+| Application statements covered | 2,781/2,781 | 2,781/2,781 |
+| Statement coverage | 100% | 100% |
+| Failed or skipped tests | 0 | 0 |
+| Regression duration | 312.85 s | 217.54 s |
+
+The Windows baseline preceded the final test typing corrections.
+A subsequent targeted regression passed all 2,559 tests across
+the nine corrected modules. The complete Linux regression
+then reproduced the full test and coverage baseline.
+
+The historical Windows regression included 2,366 PostgreSQL
+integration tests.
+
+### Static Quality and Dependencies
+
+- Ruff linting: passed.
+- Ruff formatting: 221 files checked.
+- Strict Mypy: 219 application, test, and migration source files.
+- Strict Mypy errors: zero.
+- Python dependency integrity: passed.
+- Clean Windows installation: 51 expected distributions verified.
+- Clean Linux installation: 50 expected distributions verified.
+- Shared dependency version mismatches: zero.
+
+Both installation environments used Python 3.14.7,
+pip 26.2.1, and setuptools 84.2.1. The project maintains
+49 exact-version dependency constraints, including
+platform-specific requirements.
+
+### Database and CI Acceptance
+
+- Five migration upgrades and downgrades previously verified
+  against an isolated migration acceptance database.
+- All five migrations applied to a fresh Linux PostgreSQL instance.
+- Migration head: 8e47c2a19b60.
+- PostgreSQL 17.12 and pgvector 0.8.7 verified in Linux.
+- Alembic consistency: no new upgrade operations detected.
+- Zero residual application records after regression.
+- All 11 executable CI workflow steps passed.
+- Exact 100% statement coverage and zero skipped tests enforced.
+
+The CI-equivalent acceptance was executed locally in Docker
+using an isolated database instance and the workflow's executable
+shell commands. It was not a GitHub-hosted Actions run.
+
+### Remaining Limitations
+
+Statement coverage does not establish complete branch,
+behavioral, or security coverage.
+
+Automated AI tests use synthetic responses and intercepted
+transport. Live provider accuracy, latency, and billing
+remain unverified.
+
+The local development database has been upgraded to revision
+8e47c2a19b60. Independent post-migration verification confirmed
+matching development and integration schemas, zero ORM schema
+differences, and preservation of existing application records.
+
+Both databases contained zero application records at acceptance.
+A pre-migration PostgreSQL backup was created and its archive
+inventory and integrity were verified. A restore rehearsal was
+not performed.
+
+Actual GitHub Actions execution and feature branch merge
+remain pending.

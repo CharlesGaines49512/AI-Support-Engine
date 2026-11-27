@@ -55,10 +55,28 @@ def test_incidents_table_exists(
 def test_alembic_revision(
     integration_engine: Engine,
 ) -> None:
-    """Verify the current database migration revision."""
+    """Verify the database matches the current Alembic head."""
+    from pathlib import Path
+
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    migration_directory = Path(__file__).resolve().parents[2] / "migrations"
+
+    config = Config()
+    config.set_main_option(
+        "script_location",
+        migration_directory.as_posix(),
+    )
+
+    script = ScriptDirectory.from_config(config)
+    expected_revision = script.get_current_head()
+
+    assert expected_revision is not None
+
     with integration_engine.connect() as connection:
         revision = connection.execute(
             text("SELECT version_num FROM alembic_version")
         ).scalar_one()
 
-        assert revision == "421c4f9ba04a"
+        assert revision == expected_revision
