@@ -1,7 +1,9 @@
 from fastapi import FastAPI, status
 from fastapi.responses import JSONResponse
 
+from app.api.error_handlers import register_error_handlers
 from app.api.v1.ai_analyses import router as ai_analysis_router
+from app.api.v1.application_logs import router as application_log_router
 from app.api.v1.incidents import router as incident_router
 from app.core.config import get_settings
 from app.core.database import check_database_health
@@ -14,6 +16,8 @@ app = FastAPI(
     description="AI-powered enterprise technical support platform",
     debug=settings.debug,
 )
+
+register_error_handlers(app)
 
 
 @app.get("/")
@@ -31,7 +35,55 @@ def health() -> dict[str, str]:
     return {"status": "healthy"}
 
 
-@app.get("/ready")
+@app.get(
+    "/ready",
+    responses={
+        200: {
+            "description": "Application and database are ready",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "required": ["status", "database"],
+                        "additionalProperties": False,
+                        "properties": {
+                            "status": {
+                                "type": "string",
+                                "const": "ready",
+                            },
+                            "database": {
+                                "type": "string",
+                                "const": "healthy",
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        503: {
+            "description": "Application is not ready",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "required": ["status", "database"],
+                        "additionalProperties": False,
+                        "properties": {
+                            "status": {
+                                "type": "string",
+                                "const": "not_ready",
+                            },
+                            "database": {
+                                "type": "string",
+                                "const": "unavailable",
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    },
+)
 def readiness() -> JSONResponse:
     """Check whether the application is ready to serve requests."""
     if check_database_health():
@@ -55,3 +107,5 @@ def readiness() -> JSONResponse:
 app.include_router(incident_router, prefix=get_settings().api_v1_prefix)
 
 app.include_router(ai_analysis_router, prefix=settings.api_v1_prefix)
+
+app.include_router(application_log_router, prefix=settings.api_v1_prefix)

@@ -1,10 +1,13 @@
 import asyncio
+import hashlib
+import json
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from time import perf_counter
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
@@ -16,9 +19,18 @@ from app.integrations.ai.exceptions import AIProviderError
 from app.integrations.ai.factory import create_ai_provider
 from app.integrations.ai.pricing_config import estimate_configured_ai_cost
 from app.integrations.ai.provider import AIProvider
+from app.logs.ai_evidence_contracts import (
+    LOG_EVIDENCE_VERSION,
+    AIAnalysisLogContext,
+)
+from app.logs.exceptions import LogSubmissionNotFoundError
 from app.models import AIAnalysis, Incident
 from app.models.ai_enums import AIAnalysisStatus
+from app.models.application_log import LogEntry, LogSubmission
 from app.prompts import INCIDENT_ANALYSIS_PROMPT_VERSION
+from app.prompts.log_enhanced_analysis import (
+    LOG_ENHANCED_PROMPT_VERSION,
+)
 from app.repositories import (
     AIAnalysisRepository,
     IncidentRepository,
@@ -27,12 +39,19 @@ from app.schemas.ai_execution import IncidentAnalysisExecution
 from app.security import sanitize_text
 from app.services.ai_analysis import IncidentAnalysisService
 from app.services.ai_errors import describe_ai_failure
+from app.services.ai_log_context import AILogContextService
+from app.services.log_enhanced_analysis import LogEnhancedAnalysisService
+from app.services.log_query import LogQueryService
 
 logger = logging.getLogger(__name__)
 
 
 class IncidentChangedDuringAnalysisError(ApplicationError):
     """Indicate that the analyzed incident content is stale."""
+
+
+class LogEvidenceChangedDuringAnalysisError(ApplicationError):
+    """Indicate that the analyzed diagnostic evidence is stale."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +94,106 @@ class PersistentAIAnalysisService:
                 description=incident.description,
             )
 
+    def _get_log_context(
+        self,
+        incident_id: UUID,
+        submission_id: UUID,
+    ) -> AIAnalysisLogContext:
+        """Retrieve bounded evidence belonging to the incident."""
+        query_service = LogQueryService(
+            self._session_factory,
+            self._settings,
+        )
+
+        context_service = AILogContextService(
+            query_service,
+            self._settings,
+        )
+
+        return context_service.build_context(
+            incident_id,
+            submission_id,
+        )
+
+    @staticmethod
+    def _log_evidence_digest(
+        context: AIAnalysisLogContext,
+    ) -> str:
+        """Calculate the canonical diagnostic context fingerprint."""
+
+        serialized = json.dumps(
+            context.to_dict(),
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+
+        return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _attach_log_provenance(
+        analysis: AIAnalysis,
+        context: AIAnalysisLogContext,
+    ) -> None:
+        """Record a fingerprint of the selected diagnostic context."""
+
+        analysis.log_submission_id = context.submission_id
+        analysis.log_evidence_version = LOG_EVIDENCE_VERSION
+        analysis.log_evidence_sha256 = PersistentAIAnalysisService._log_evidence_digest(
+            context
+        )
+        analysis.log_evidence_event_count = context.selected_event_count
+
+    def _verify_log_evidence(
+        self,
+        session: Session,
+        incident_id: UUID,
+        submission: LogSubmission,
+        analysis: AIAnalysis,
+    ) -> None:
+        """Verify the selected evidence before committing analysis."""
+
+        # Lock existing entries while the submission remains locked.
+        # Bound the query even if stored entry accounting is corrupted.
+        statement = (
+            select(LogEntry.id)
+            .where(LogEntry.submission_id == submission.id)
+            .order_by(LogEntry.position)
+            .limit(self._settings.log_max_entries + 1)
+            .with_for_update()
+        )
+
+        session.scalars(statement).all()
+
+        query = LogQueryService(
+            self._session_factory,
+            self._settings,
+        )
+
+        evidence = query.get_evidence_in_session(
+            session,
+            incident_id,
+            submission.id,
+        )
+
+        current_context = AIAnalysisLogContext(
+            incident_id=incident_id,
+            submission_id=submission.id,
+            evidence=evidence,
+        )
+
+        current_context.validate(
+            self._settings,
+            incident_id,
+        )
+
+        current_digest = self._log_evidence_digest(current_context)
+
+        if current_digest != analysis.log_evidence_sha256:
+            raise LogEvidenceChangedDuringAnalysisError(
+                "Diagnostic evidence changed during analysis."
+            )
+
     def _persist(
         self,
         snapshot: IncidentSnapshot,
@@ -99,6 +218,24 @@ class PersistentAIAnalysisService:
                 ):
                     raise IncidentChangedDuringAnalysisError(
                         "Incident content changed during analysis."
+                    )
+
+                if analysis.log_submission_id is not None:
+                    submission = session.get(
+                        LogSubmission,
+                        analysis.log_submission_id,
+                        with_for_update=True,
+                        populate_existing=True,
+                    )
+
+                    if submission is None or submission.incident_id != snapshot.id:
+                        raise LogSubmissionNotFoundError()
+
+                    self._verify_log_evidence(
+                        session,
+                        snapshot.id,
+                        submission,
+                        analysis,
                     )
 
                 repository = AIAnalysisRepository(session)
@@ -189,6 +326,8 @@ class PersistentAIAnalysisService:
     async def analyze_incident(
         self,
         incident_id: UUID,
+        *,
+        submission_id: UUID | None = None,
     ) -> AIAnalysis:
         """Analyze an incident and persist its execution history."""
         snapshot = await asyncio.to_thread(
@@ -196,21 +335,43 @@ class PersistentAIAnalysisService:
             incident_id,
         )
 
+        context: AIAnalysisLogContext | None = None
+
+        if submission_id is not None:
+            context = await asyncio.to_thread(
+                self._get_log_context,
+                incident_id,
+                submission_id,
+            )
+
         started_at = perf_counter()
 
         try:
             provider = self._provider_factory(self._settings)
 
             try:
-                service = IncidentAnalysisService(
-                    provider,
-                    max_input_chars=self._settings.ai_max_input_chars,
-                )
+                if context is None:
+                    service = IncidentAnalysisService(
+                        provider,
+                        max_input_chars=self._settings.ai_max_input_chars,
+                    )
 
-                execution = await service.analyze(
-                    title=snapshot.title,
-                    description=snapshot.description,
-                )
+                    execution = await service.analyze(
+                        title=snapshot.title,
+                        description=snapshot.description,
+                    )
+                else:
+                    enhanced_service = LogEnhancedAnalysisService(
+                        provider,
+                        self._settings,
+                    )
+
+                    execution = await enhanced_service.analyze(
+                        incident_id=snapshot.id,
+                        title=snapshot.title,
+                        description=snapshot.description,
+                        context=context,
+                    )
             finally:
                 await self._close_provider(provider)
 
@@ -232,6 +393,10 @@ class PersistentAIAnalysisService:
                 model=execution.response.model,
                 usage=execution.response.usage,
             )
+
+        if context is not None:
+            self._attach_log_provenance(record, context)
+            record.prompt_version = LOG_ENHANCED_PROMPT_VERSION
 
         return await asyncio.to_thread(
             self._persist,

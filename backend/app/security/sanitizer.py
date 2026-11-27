@@ -35,22 +35,66 @@ REDACTION_RULES: Final[tuple[tuple[re.Pattern[str], str], ...]] = (
     ),
     (
         re.compile(
-            r"\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+",
+            (
+                "\\b([b\\uff42][e\\uff45][a\\uff4"
+                "1][r\\uff52][e\\uff45][r\\uff52"
+                "]|[b\\uff42][a\\uff41][s\\uff53"
+                "][i\\uff49][c\\uff43])\\s+[A-Za"
+                "-z0-9._~+/=-]+"
+            ),
             re.IGNORECASE,
         ),
         r"\1 [REDACTED_TOKEN]",
     ),
     (
         re.compile(
-            r"""(["']?\b(?:password|passwd|pwd|"""
-            r"""api[_-]?key|access[_-]?token|"""
-            r"""refresh[_-]?token|client[_-]?secret|"""
-            r"""secret[_-]?key|token|secret)\b"""
-            r"""["']?\s*[:=]\s*)"""
-            r"""(?:"(?:\\[^\r\n]|[^"\\\r\n])*" """
-            r"""|'(?:\\[^\r\n]|[^'\\\r\n])*'"""
-            r"""|"[^\r\n]*|'[^\r\n]*"""
-            r"""|[^\s,;&}\]]+)""",
+            (
+                "([\"']?\\b(?:[p\\uff50][a\\uff41"
+                "][s\\uff53][s\\uff53][w\\uff57]"
+                "[o\\uff4f][r\\uff52][d\\uff44]|"
+                "[p\\uff50][a\\uff41][s\\uff53]["
+                "s\\uff53][w\\uff57][d\\uff44]|["
+                "p\\uff50][w\\uff57][d\\uff44]|["
+                "a\\uff41][p\\uff50][i\\uff49][_"
+                " \\-\\u00a0\\u1680\\u2000-\\u200a"
+                "\\u202f\\u205f\\u3000\\uff3f\\uff"
+                "0d]*[k\\uff4b][e\\uff45][y\\uff"
+                "59]|[a\\uff41][c\\uff43][c\\uff"
+                "43][e\\uff45][s\\uff53][s\\uff5"
+                "3][_ \\-\\u00a0\\u1680\\u2000-\\u"
+                "200a\\u202f\\u205f\\u3000\\uff3f"
+                "\\uff0d]*[t\\uff54][o\\uff4f][k"
+                "\\uff4b][e\\uff45][n\\uff4e]|[r"
+                "\\uff52][e\\uff45][f\\uff46][r\\"
+                "uff52][e\\uff45][s\\uff53][h\\u"
+                "ff48][_ \\-\\u00a0\\u1680\\u2000"
+                "-\\u200a\\u202f\\u205f\\u3000\\uf"
+                "f3f\\uff0d]*[t\\uff54][o\\uff4f"
+                "][k\\uff4b][e\\uff45][n\\uff4e]"
+                "|[c\\uff43][l\\uff4c][i\\uff49]"
+                "[e\\uff45][n\\uff4e][t\\uff54]["
+                "_ \\-\\u00a0\\u1680\\u2000-\\u200"
+                "a\\u202f\\u205f\\u3000\\uff3f\\uf"
+                "f0d]*[s\\uff53][e\\uff45][c\\uf"
+                "f43][r\\uff52][e\\uff45][t\\uff"
+                "54]|[s\\uff53][e\\uff45][c\\uff"
+                "43][r\\uff52][e\\uff45][t\\uff5"
+                "4][_ \\-\\u00a0\\u1680\\u2000-\\u"
+                "200a\\u202f\\u205f\\u3000\\uff3f"
+                "\\uff0d]*[k\\uff4b][e\\uff45][y"
+                "\\uff59]|[t\\uff54][o\\uff4f][k"
+                "\\uff4b][e\\uff45][n\\uff4e]|[s"
+                "\\uff53][e\\uff45][c\\uff43][r\\"
+                "uff52][e\\uff45][t\\uff54])\\b["
+                "\"']?\\s*[:=\\uff1a\\uff1d\\ufe55"
+                "\\ufe66]\\s*)(?!\\[REDACTED_SEC"
+                "RET\\](?=$|[\\s,;}&]|\\]+(?=$|["
+                "\\s,;}&])))(?:\\[REDACTED[^\\s,"
+                ';&}]*|"(?:\\\\[^\\r\\n]|[^"\\\\\\r\\'
+                "n])*\" |'(?:\\\\[^\\r\\n]|[^'\\\\\\r"
+                "\\n])*'|\"[^\\r\\n]*|'[^\\r\\n]*|["
+                "^\\s,;&}\\]]+)"
+            ),
             re.IGNORECASE | re.VERBOSE,
         ),
         r"\1[REDACTED_SECRET]",

@@ -30,6 +30,21 @@ class AIAnalysis(Base):
 
     __table_args__ = (
         CheckConstraint(
+            "(log_submission_id IS NULL "
+            "AND log_evidence_version IS NULL "
+            "AND log_evidence_sha256 IS NULL "
+            "AND log_evidence_event_count IS NULL) "
+            "OR "
+            "(log_submission_id IS NOT NULL "
+            "AND log_evidence_version IS NOT NULL "
+            "AND length(btrim(log_evidence_version)) > 0 "
+            "AND log_evidence_sha256 IS NOT NULL "
+            "AND log_evidence_sha256 ~ '^[0-9a-f]{64}$' "
+            "AND log_evidence_event_count IS NOT NULL "
+            "AND log_evidence_event_count BETWEEN 0 AND 100)",
+            name="log_evidence_consistency",
+        ),
+        CheckConstraint(
             "confidence IS NULL OR (confidence >= 0 AND confidence <= 1)",
             name="confidence_range",
         ),
@@ -247,6 +262,27 @@ class AIAnalysis(Base):
 
     error_message: Mapped[str | None] = mapped_column(
         Text,
+        nullable=True,
+    )
+
+    log_submission_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        nullable=True,
+        index=True,
+    )
+
+    log_evidence_version: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+    )
+
+    log_evidence_sha256: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+
+    log_evidence_event_count: Mapped[int | None] = mapped_column(
+        Integer,
         nullable=True,
     )
 

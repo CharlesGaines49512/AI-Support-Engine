@@ -63,4 +63,23 @@ class AIAnalysisResponse(BaseModel):
     error_code: str | None
     error_message: str | None
 
+    log_submission_id: UUID | None = None
+
+    log_evidence_version: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
+    )
+
+    log_evidence_sha256: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+    )
+
+    log_evidence_event_count: int | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+    )
+
     created_at: datetime

@@ -4,6 +4,10 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Response, status
 
 from app.api.dependencies import IncidentServiceDependency
+from app.api.error_responses import (
+    VALIDATION_ERROR_RESPONSES,
+    http_error_response,
+)
 from app.core.exceptions import (
     IncidentNotFoundError,
     IncidentResolutionRequiredError,
@@ -18,6 +22,7 @@ from app.schemas.incident import (
 from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter(
+    responses=VALIDATION_ERROR_RESPONSES,
     prefix="/incidents",
     tags=["Incidents"],
 )
@@ -82,7 +87,7 @@ def list_incidents(
 @router.get(
     "/{incident_id}",
     response_model=IncidentResponse,
-    responses={404: {"description": "Incident not found"}},
+    responses={404: http_error_response("Incident not found")},
 )
 def get_incident(
     incident_id: UUID,
@@ -104,8 +109,8 @@ def get_incident(
     "/{incident_id}",
     response_model=IncidentResponse,
     responses={
-        404: {"description": "Incident not found"},
-        409: {"description": "Incident lifecycle conflict"},
+        404: http_error_response("Incident not found"),
+        409: http_error_response("Incident lifecycle conflict"),
     },
 )
 def update_incident(
@@ -137,7 +142,7 @@ def update_incident(
     "/{incident_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
-    responses={404: {"description": "Incident not found"}},
+    responses={404: http_error_response("Incident not found")},
 )
 def delete_incident(
     incident_id: UUID,

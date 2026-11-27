@@ -1,4 +1,4 @@
-﻿# AI Integration Architecture
+# AI Integration Architecture
 
 ## 1. Overview
 
@@ -19,9 +19,9 @@ established in the original system architecture.
 - Allow support engineers to override recommendations.
 - Establish a reusable AI provider abstraction.
 
-Documentation-backed troubleshooting, log analysis, vector
-retrieval, and remediation workflows will be expanded in later
-development stages.
+Log analysis and diagnostic evidence enrichment are implemented
+in Stage 7. Documentation-backed troubleshooting, vector
+retrieval, and remediation workflows remain future work.
 
 ## 3. Provider Strategy
 
@@ -207,21 +207,32 @@ Stage 6 is complete when:
 7. Existing incident operations remain independent of AI
    availability.
 8. Automated tests and static quality checks pass.
-9. Application statement coverage remains at or above the
-   existing CI threshold of 80%.
+9. Application statement coverage meets the configured CI
+   requirement. The original Stage 6 threshold was 80%;
+   the Stage 7 workflow now requires exact 100% coverage.
 10. AI response quality is evaluated using synthetic incidents.
-11. A controlled live provider request is verified.
+11. A controlled live provider request is verified separately
+    when paid access and explicit authorization are available.
+    This original acceptance item remains deferred.
 12. Technical documentation and API documentation are updated.
 13. GitHub Actions passes before the feature branch is merged.
 
-The development target is to maintain the existing 100%
-statement coverage baseline where practical.
+The current CI requirement is exact 100% application statement
+coverage with zero failed, errored, or skipped tests. This is
+not a guarantee of comprehensive behavioral or security coverage.
 
 ## 12. Implementation Status
 
-Status: Proposed
-Stage: 6
+Status: Stage 6 implemented; Stage 7 extension verified through
+local Windows and isolated Linux regression.
 Application Version: 0.1.0
 
-This document defines the intended implementation and does not
-represent completed AI functionality.
+This document preserves the original AI integration design.
+Persistent incident analysis and optional log-enhanced analysis
+are implemented. Live provider evaluation remains deferred.
+
+Local Linux CI-equivalent acceptance has passed. Actual GitHub
+Actions execution and Stage 7 branch integration remain pending.
+
+See [AI Integration](ai-integration.md) and
+[Log Ingestion Architecture](log-ingestion-architecture.md).

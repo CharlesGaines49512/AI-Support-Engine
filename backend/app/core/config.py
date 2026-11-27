@@ -10,6 +10,48 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 class Settings(BaseSettings):
+    log_max_payload_bytes: int = Field(
+        default=1048576,
+        ge=1024,
+        le=10485760,
+    )
+
+    log_max_entries: int = Field(
+        default=1000,
+        ge=1,
+        le=10000,
+    )
+
+    log_max_nesting_depth: int = Field(
+        default=32,
+        ge=1,
+        le=128,
+    )
+
+    log_max_message_chars: int = Field(
+        default=10000,
+        ge=100,
+        le=20000,
+    )
+
+    log_max_metadata_chars: int = Field(
+        default=500,
+        ge=32,
+        le=2000,
+    )
+
+    log_max_evidence_entries: int = Field(
+        default=20,
+        ge=1,
+        le=100,
+    )
+
+    log_max_evidence_chars: int = Field(
+        default=8000,
+        ge=256,
+        le=20000,
+    )
+
     ai_pricing_model: str | None = None
     ai_pricing_input_usd_per_million: Decimal | None = None
     ai_pricing_cached_input_usd_per_million: Decimal | None = None
