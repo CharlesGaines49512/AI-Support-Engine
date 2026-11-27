@@ -231,8 +231,8 @@ This document preserves the original AI integration design.
 Persistent incident analysis and optional log-enhanced analysis
 are implemented. Live provider evaluation remains deferred.
 
-Local Linux CI-equivalent acceptance has passed. Actual GitHub
-Actions execution and Stage 7 branch integration remain pending.
+Local Linux CI-equivalent acceptance has passed.
+GitHub-hosted CI passed and Stage 7 was merged into main.
 
 See [AI Integration](ai-integration.md) and
 [Log Ingestion Architecture](log-ingestion-architecture.md).
